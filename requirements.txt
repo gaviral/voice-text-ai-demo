@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+openai-whisper
+pyannote.audio
+torch
+torchaudio
+transformers
+sentence-transformers
+pymilvus
+faiss-cpu
+ray
+mlflow
+python-multipart
+requests
