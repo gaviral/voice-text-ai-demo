@@ -2,20 +2,13 @@ from fastapi import FastAPI, File, UploadFile
 import whisper
 import os
 
-print(os.environ.get("LOW_MEMORY", "false").lower())
-print(os.environ.get("HF_AUTH_TOKEN", None))
-
-# Optional: import Pipeline only if we decide to do diarization
 LOW_MEMORY = os.environ.get("LOW_MEMORY", "false").lower() == "true"
 HF_AUTH_TOKEN = os.environ.get("HF_AUTH_TOKEN", None)
 
-
 app = FastAPI()
 
-# Load Whisper
 whisper_model = whisper.load_model("tiny")
 
-# If memory isn't restricted, and we have a token, load diarization
 if not LOW_MEMORY and HF_AUTH_TOKEN:
     from pyannote.audio import Pipeline
     diarization_pipeline = Pipeline.from_pretrained(
@@ -24,6 +17,11 @@ if not LOW_MEMORY and HF_AUTH_TOKEN:
     )
 else:
     diarization_pipeline = None
+
+from transformers import MarianTokenizer, MarianMTModel
+model_name = "Helsinki-NLP/opus-mt-en-fr"
+tokenizer = MarianTokenizer.from_pretrained(model_name)
+translation_model = MarianMTModel.from_pretrained(model_name)
 
 @app.get("/")
 def read_root():
@@ -59,3 +57,13 @@ async def diarize_audio(file: UploadFile = File(...)):
             "speaker": speaker
         })
     return {"segments": speaker_segments}
+
+@app.post("/translate")
+async def translate_text(text: str):
+    inputs = tokenizer([text], return_tensors="pt")
+    translated_tokens = translation_model.generate(**inputs)
+    translated_text = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
+    return {
+        "original_text": text,
+        "translated_text": translated_text
+    }
