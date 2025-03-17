@@ -128,8 +128,26 @@ docker build -t voice-text-ai-demo .
 docker run -p 8000:8000 -e HF_AUTH_TOKEN=your_token voice-text-ai-demo
 ```
 
+#### Lightweight Mode vs. Full-Featured Mode
+By default, the Docker deployment runs in lightweight mode (`LOW_MEMORY=true`), which disables memory-intensive features to ensure stability in resource-constrained environments. 
+
+To run the Docker container in full-featured mode:
+```bash
+docker run -p 8000:8000 -e LOW_MEMORY=false -e HF_AUTH_TOKEN=your_token voice-text-ai-demo
+```
+
+**Warning**: Full-featured mode requires significantly more memory (at least 4GB RAM recommended) and may cause container crashes in resource-constrained environments.
+
 ### Environment Variables
 - `LOW_MEMORY`: Set "true" to disable memory-intensive features
+  - When set to "true", the following features are disabled:
+    - Speech transcription
+    - Speaker diarization
+    - Text translation
+    - Sentiment analysis
+    - Compliance keyword detection
+    - Combined pipelines
+  - Default: "false" for local development, "true" for Docker deployment
 - `HF_AUTH_TOKEN`: HuggingFace token for diarization
 
 ## Testing the Endpoints

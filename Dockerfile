@@ -12,5 +12,8 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r re
 # Copy application code
 COPY . /app/
 
+# Set environment variables
+ENV LOW_MEMORY=true
+
 # Run the service
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

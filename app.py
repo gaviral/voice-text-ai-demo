@@ -1,19 +1,21 @@
 from fastapi import FastAPI, File, UploadFile, Body
-import whisper
 import os
-from transformers import pipeline
 from pydantic import BaseModel
 from typing import List, Dict, Optional
-from sentence_transformers import SentenceTransformer, util
-import torch
 
 LOW_MEMORY = os.environ.get("LOW_MEMORY", "false").lower() == "true"
 HF_AUTH_TOKEN = os.environ.get("HF_AUTH_TOKEN", None)
 
 app = FastAPI()
 
-whisper_model = whisper.load_model("tiny")
+# Conditionally load Whisper model
+if not LOW_MEMORY:
+    import whisper
+    whisper_model = whisper.load_model("tiny")
+else:
+    whisper_model = None
 
+# Conditionally load diarization pipeline
 if not LOW_MEMORY and HF_AUTH_TOKEN:
     from pyannote.audio import Pipeline
     diarization_pipeline = Pipeline.from_pretrained(
@@ -23,55 +25,71 @@ if not LOW_MEMORY and HF_AUTH_TOKEN:
 else:
     diarization_pipeline = None
 
-from transformers import MarianTokenizer, MarianMTModel
-model_name = "Helsinki-NLP/opus-mt-en-fr"
-tokenizer = MarianTokenizer.from_pretrained(model_name)
-translation_model = MarianMTModel.from_pretrained(model_name)
+# Conditionally load translation model
+if not LOW_MEMORY:
+    from transformers import MarianTokenizer, MarianMTModel
+    model_name = "Helsinki-NLP/opus-mt-en-fr"
+    tokenizer = MarianTokenizer.from_pretrained(model_name)
+    translation_model = MarianMTModel.from_pretrained(model_name)
+else:
+    tokenizer = None
+    translation_model = None
 
-# Initialize sentiment analysis pipeline
-sentiment_analyzer = pipeline("sentiment-analysis")
+# Conditionally initialize sentiment analysis pipeline
+if not LOW_MEMORY:
+    from transformers import pipeline
+    sentiment_analyzer = pipeline("sentiment-analysis")
+else:
+    sentiment_analyzer = None
 
-# Initialize sentence transformer model for semantic similarity
-sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
-
-# Define compliance keywords with categories
-COMPLIANCE_KEYWORDS = {
-    "insider_trading": [
-        "insider information", 
-        "non-public information", 
-        "before announcement", 
-        "confidential data",
-        "trading window",
-        "blackout period"
-    ],
-    "market_manipulation": [
-        "pump and dump", 
-        "artificially inflate", 
-        "manipulate price", 
-        "spread rumors",
-        "false information"
-    ],
-    "confidentiality": [
-        "strictly confidential", 
-        "not for distribution", 
-        "internal only", 
-        "do not share",
-        "between us only"
-    ],
-    "suspicious_activity": [
-        "off the record", 
-        "don't tell anyone", 
-        "delete this message", 
-        "not through email",
-        "call me instead",
-        "avoid documentation"
-    ]
-}
-
-# Precompute embeddings for all keywords
-KEYWORD_EMBEDDINGS = {}
-for category, keywords in COMPLIANCE_KEYWORDS.items():
-    KEYWORD_EMBEDDINGS[category] = sentence_model.encode(keywords)
+# Conditionally initialize sentence transformer model for semantic similarity
+if not LOW_MEMORY:
+    import torch
+    from sentence_transformers import SentenceTransformer, util
+    sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+    
+    # Define compliance keywords with categories
+    COMPLIANCE_KEYWORDS = {
+        "insider_trading": [
+            "insider information", 
+            "non-public information", 
+            "before announcement", 
+            "confidential data",
+            "trading window",
+            "blackout period"
+        ],
+        "market_manipulation": [
+            "pump and dump", 
+            "artificially inflate", 
+            "manipulate price", 
+            "spread rumors",
+            "false information"
+        ],
+        "confidentiality": [
+            "strictly confidential", 
+            "not for distribution", 
+            "internal only", 
+            "do not share",
+            "between us only"
+        ],
+        "suspicious_activity": [
+            "off the record", 
+            "don't tell anyone", 
+            "delete this message", 
+            "not through email",
+            "call me instead",
+            "avoid documentation"
+        ]
+    }
+    
+    # Precompute embeddings for all keywords
+    KEYWORD_EMBEDDINGS = {}
+    for category, keywords in COMPLIANCE_KEYWORDS.items():
+        KEYWORD_EMBEDDINGS[category] = sentence_model.encode(keywords)
+else:
+    sentence_model = None
+    COMPLIANCE_KEYWORDS = {}
+    KEYWORD_EMBEDDINGS = {}
 
 # Define request models
 class TextRequest(BaseModel):
@@ -95,10 +113,44 @@ class KeywordDetectionResponse(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"message": "Hello World"}
+    if LOW_MEMORY:
+        return {
+            "message": "Voice Text AI Demo - Running in Lightweight Mode",
+            "mode": "LOW_MEMORY",
+            "available_endpoints": ["/"],
+            "disabled_endpoints": [
+                "/transcribe", 
+                "/diarize", 
+                "/translate", 
+                "/analyze-sentiment", 
+                "/detect-compliance-keywords",
+                "/transcribe-with-sentiment",
+                "/transcribe-with-compliance-check"
+            ],
+            "info": "Set LOW_MEMORY=false to enable all features (requires more resources)"
+        }
+    else:
+        return {
+            "message": "Voice Text AI Demo - Running in Full-Featured Mode",
+            "mode": "FULL_FEATURED",
+            "available_endpoints": [
+                "/",
+                "/transcribe", 
+                "/diarize", 
+                "/translate", 
+                "/analyze-sentiment", 
+                "/detect-compliance-keywords",
+                "/transcribe-with-sentiment",
+                "/transcribe-with-compliance-check"
+            ],
+            "info": "All features are enabled (using more memory)"
+        }
 
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
+    if whisper_model is None:
+        return {"error": "Transcription disabled in LOW_MEMORY mode."}
+        
     temp_filename = "temp_audio_file"
     with open(temp_filename, "wb") as f:
         f.write(await file.read())
@@ -110,7 +162,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
 @app.post("/diarize")
 async def diarize_audio(file: UploadFile = File(...)):
     if diarization_pipeline is None:
-        return {"error": "Diarization disabled or missing HF_AUTH_TOKEN."}
+        return {"error": "Diarization disabled in LOW_MEMORY mode or missing HF_AUTH_TOKEN."}
 
     temp_filename = "temp_audio_file"
     with open(temp_filename, "wb") as f:
@@ -130,6 +182,9 @@ async def diarize_audio(file: UploadFile = File(...)):
 
 @app.post("/translate")
 async def translate_text(request: TextRequest):
+    if translation_model is None or tokenizer is None:
+        return {"error": "Translation disabled in LOW_MEMORY mode."}
+        
     inputs = tokenizer([request.text], return_tensors="pt")
     translated_tokens = translation_model.generate(**inputs)
     translated_text = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
@@ -144,6 +199,9 @@ async def analyze_sentiment(request: TextRequest):
     Analyze the sentiment of the provided text.
     Returns sentiment classification (POSITIVE/NEGATIVE/NEUTRAL) and confidence score.
     """
+    if sentiment_analyzer is None:
+        return {"error": "Sentiment analysis disabled in LOW_MEMORY mode."}
+        
     sentiment_result = sentiment_analyzer(request.text)
     
     return {
@@ -158,6 +216,9 @@ async def transcribe_with_sentiment(file: UploadFile = File(...)):
     """
     Transcribe audio and analyze the sentiment of the transcribed text in one step.
     """
+    if whisper_model is None or sentiment_analyzer is None:
+        return {"error": "Transcription with sentiment analysis disabled in LOW_MEMORY mode."}
+        
     temp_filename = "temp_audio_file"
     with open(temp_filename, "wb") as f:
         f.write(await file.read())
@@ -182,6 +243,9 @@ async def detect_compliance_keywords(request: KeywordDetectionRequest):
     Detect potentially problematic phrases in financial communications.
     Uses semantic similarity to identify phrases similar to known compliance risk keywords.
     """
+    if sentence_model is None:
+        return {"error": "Compliance keyword detection disabled in LOW_MEMORY mode."}
+        
     # Encode the input text
     text_embedding = sentence_model.encode(request.text)
     
@@ -242,6 +306,9 @@ async def transcribe_with_compliance_check(file: UploadFile = File(...), thresho
     """
     Transcribe audio and check for compliance keywords in one step.
     """
+    if whisper_model is None or sentence_model is None:
+        return {"error": "Transcription with compliance check disabled in LOW_MEMORY mode."}
+        
     temp_filename = "temp_audio_file"
     with open(temp_filename, "wb") as f:
         f.write(await file.read())
