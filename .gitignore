@@ -357,5 +357,10 @@ fabric.properties
 
 # Android studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
-data/sample.wav
-data/sample_2.wav
+
+# Audio files
+*.wav
+
+# Ignore specific files in screenshots folder
+screenshots/sample.wav
+screenshots/sample_2.wav
