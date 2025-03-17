@@ -11,7 +11,7 @@ A dockerized FastAPI web application that provides audio processing capabilities
 
 ## Demo Screenshots
 
-The `data` folder contains demonstration screenshots and examples:
+The `screenshots` folder contains demonstration screenshots and examples:
 - **`transcribe_demo.png`**: Shows the speech-to-text transcription feature
 - **`diarize_high_mem_demo.png`**: Shows the speaker diarization feature
 - **`translate_demo.png`**: Shows the text translation feature
@@ -80,8 +80,8 @@ curl -X POST "http://localhost:8000/transcribe" \
 }
 ```
 
-#### Local Testing:
-![Transcribe Demo](data/transcribe_demo.png)
+#### Local Testing (Screenshot):
+![Transcribe Demo](screenshots/transcribe_demo.png)
 
 ### Diarize Audio
 
@@ -111,8 +111,8 @@ curl -X POST "http://localhost:8000/diarize" \
 }
 ```
 
-#### Local Testing:
-![Diarize Demo](data/diarize_high_mem_demo.png)
+#### Local Testing (Screenshot):
+![Diarize Demo](screenshots/diarize_high_mem_demo.png)
 
 ### Translate Text
 
@@ -134,8 +134,8 @@ curl -X POST "http://localhost:8000/translate" \
 }
 ```
 
-#### Local Testing:
-![Translate Demo](data/translate_demo.png)
+#### Local Testing (Screenshot):
+![Translate Demo](screenshots/translate_demo.png)
 
 ### Analyze Sentiment
 
