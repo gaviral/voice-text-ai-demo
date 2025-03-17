@@ -12,3 +12,4 @@ ray
 mlflow
 python-multipart
 requests
+pydantic
