@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Body
 import whisper
 import os
 
@@ -59,7 +59,7 @@ async def diarize_audio(file: UploadFile = File(...)):
     return {"segments": speaker_segments}
 
 @app.post("/translate")
-async def translate_text(text: str):
+async def translate_text(text: str = Body(...)):
     inputs = tokenizer([text], return_tensors="pt")
     translated_tokens = translation_model.generate(**inputs)
     translated_text = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
