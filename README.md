@@ -1,219 +1,90 @@
 # Voice Text AI Demo
 
-A dockerized FastAPI web application that provides audio processing capabilities including speech transcription, speaker diarization, text translation, and sentiment analysis.
+A microservice for financial compliance audio processing.
 
-## Features
+## Core Technologies
 
-- **Speech Transcription**: Convert audio files to text using OpenAI's Whisper model
-- **Speaker Diarization**: Identify different speakers in an audio file (requires HuggingFace authentication token)
-- **Text Translation**: Translate English text to French using the Helsinki-NLP model
-- **Sentiment Analysis**: Analyze the sentiment of text or transcribed audio to detect emotional tone
+- **FastAPI + Docker**: Containerized API service
+- **Whisper (OpenAI)**: Speech recognition model
+- **PyAnnote**: Speaker diarization framework
+- **MarianMT (Helsinki-NLP)**: Translation model
+- **Hugging Face Transformers**: NLP pipelines
+- **Sentence Transformers**: Semantic similarity detection
 
-## Demo Screenshots
+## Key Features & API Endpoints
 
-The `screenshots` folder contains demonstration screenshots and examples:
-- **`transcribe_demo.png`**: Shows the speech-to-text transcription feature
-- **`diarize_high_mem_demo.png`**: Shows the speaker diarization feature
-- **`translate_demo.png`**: Shows the text translation feature
+### 1. Speech Transcription
+Convert audio to text using **Whisper model**.
+- **Financial Use Cases**: Regulatory record-keeping, call monitoring, searchable voice archives
+- **Endpoint**: `POST /transcribe`
+  ```bash
+  curl -X POST "http://localhost:8000/transcribe" -F "file=@sample.wav"
+  ```
 
-## Requirements
+### 2. Speaker Diarization
+Identify speakers in recordings using **PyAnnote**.
+- **Financial Use Cases**: Meeting attribution, unauthorized speaker detection, conversation analysis
+- **Endpoint**: `POST /diarize`
+  ```bash
+  curl -X POST "http://localhost:8000/diarize" -F "file=@sample.wav"
+  ```
 
-- **Python 3.11+**
-- **FFmpeg**
-- **Docker** (optional, for containerized deployment)
+### 3. Text Translation
+English-to-French translation with **MarianMT**.
+- **Financial Use Cases**: Cross-border compliance, multi-jurisdiction regulation
+- **Endpoint**: `POST /translate`
+  ```bash
+  curl -X POST "http://localhost:8000/translate" -d '{"text": "Hello, how are you?"}'
+  ```
 
-## Installation
+### 4. Sentiment Analysis
+Classify text as **POSITIVE/NEGATIVE/NEUTRAL**.
+- **Financial Use Cases**: Risk signaling, emotional pattern detection, satisfaction monitoring
+- **Endpoint**: `POST /analyze-sentiment`
+  ```bash
+  curl -X POST "http://localhost:8000/analyze-sentiment" -d '{"text": "I am extremely happy with the service provided."}'
+  ```
 
-### Local Setup
+### 5. Compliance Keyword Detection
+Flag compliance issues through **semantic similarity**.
+- **Financial Use Cases**: Insider trading prevention, confidentiality monitoring, regulatory violation detection
+- **Endpoint**: `POST /detect-compliance-keywords`
+  ```bash
+  curl -X POST "http://localhost:8000/detect-compliance-keywords" -d '{"text": "Let me share some insider information about the merger."}'
+  ```
 
-1. Clone the repository
-2. Create a virtual environment:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-3. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+### 6. Combined Pipelines
 
-### Docker Setup
+#### Transcribe with Sentiment Analysis
+One-step speech-to-sentiment analysis.
+- **Endpoint**: `POST /transcribe-with-sentiment`
+  ```bash
+  curl -X POST "http://localhost:8000/transcribe-with-sentiment" -F "file=@sample.wav"
+  ```
 
-Build and run the Docker container:
+#### Transcribe with Compliance Check
+Combined transcription and compliance analysis.
+- **Endpoint**: `POST /transcribe-with-compliance-check`
+  ```bash
+  curl -X POST "http://localhost:8000/transcribe-with-compliance-check" -F "file=@sample.wav"
+  ```
+
+## Setup Instructions
+
+### Local Development
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app:app --reload
 ```
+
+### Docker Deployment
+```bash
 docker build -t voice-text-ai-demo .
 docker run -p 8000:8000 -e HF_AUTH_TOKEN=your_token voice-text-ai-demo
 ```
 
-## Environment Variables
-
-- **`LOW_MEMORY`**: Set to "true" to disable memory-intensive features (default: "false")
-- **`HF_AUTH_TOKEN`**: HuggingFace authentication token required for speaker diarization
-
-## API Endpoints
-
-- **`GET /`**: Health check endpoint
-- **`POST /transcribe`**: Transcribe audio file to text
-- **`POST /diarize`**: Identify different speakers in an audio file
-- **`POST /translate`**: Translate English text to French
-- **`POST /analyze-sentiment`**: Analyze the sentiment of provided text
-- **`POST /transcribe-with-sentiment`**: Transcribe audio and analyze sentiment in one step
-
-## Usage Examples
-
-### Transcribe Audio
-
-#### Endpoint: `/transcribe`
-
-#### Request:
-```bash
-curl -X POST "http://localhost:8000/transcribe" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@sample.wav"
-```
-
-#### Response:
-```json
-{
-  "transcript": "Hello, how are you doing? I'm doing good."
-}
-```
-
-#### Local Testing (Screenshot):
-![Transcribe Demo](screenshots/transcribe_demo.png)
-
-### Diarize Audio
-
-#### Endpoint: `/diarize`
-
-#### Request:
-```bash
-curl -X POST "http://localhost:8000/diarize" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@sample.wav"
-```
-
-#### Response:
-```json
-{
-  "segments": [
-    {
-      "start": 1.0435837020000002,
-      "end": 3.4971879260000004,
-      "speaker": "SPEAKER_00",
-      "start": 3.4971879260000004,
-      "end": 5.797107238,
-      "speaker": "SPEAKER_01"
-    }
-  ]
-}
-```
-
-#### Local Testing (Screenshot):
-![Diarize Demo](screenshots/diarize_high_mem_demo.png)
-
-### Translate Text
-
-#### Endpoint: `/translate`
-
-#### Request:
-```bash
-curl -X POST "http://localhost:8000/translate" \
-  -H "accept: application/json" \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello, how are you?"}'
-```
-
-#### Response:
-```json
-{
-  "original_text": "Hello, how are you?",
-  "translated_text": "Bonjour, comment allez-vous ?"
-}
-```
-
-#### Local Testing (Screenshot):
-![Translate Demo](screenshots/translate_demo.png)
-
-### Analyze Sentiment
-
-#### Endpoint: `/analyze-sentiment`
-
-#### Request:
-```bash
-curl -X POST "http://localhost:8000/analyze-sentiment" \
-  -H "accept: application/json" \
-  -H "Content-Type: application/json" \
-  -d '{"text": "I am extremely happy with the service provided. The team was professional and efficient."}'
-```
-
-#### Response:
-```json
-{
-  "text": "I am extremely happy with the service provided. The team was professional and efficient.",
-  "sentiment": "POSITIVE",
-  "score": 0.9987,
-  "explanation": "The text has been classified as POSITIVE with a confidence of 0.99"
-}
-```
-
-### Transcribe with Sentiment Analysis
-
-#### Endpoint: `/transcribe-with-sentiment`
-
-#### Request:
-```bash
-curl -X POST "http://localhost:8000/transcribe-with-sentiment" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@sample.wav"
-```
-
-#### Response:
-```json
-{
-  "transcript": "The meeting went well, but we need to address some concerns about the project timeline.",
-  "sentiment": "NEUTRAL",
-  "score": 0.7654,
-  "explanation": "The transcript has been classified as NEUTRAL with a confidence of 0.77"
-}
-```
-
-## Technologies Used
-
-- **FastAPI**: Web framework for building APIs
-- **Whisper**: OpenAI's speech recognition model
-- **PyAnnote**: Audio processing library for speaker diarization
-- **MarianMT**: Translation model from Helsinki-NLP
-- **Hugging Face Transformers**: For sentiment analysis and other NLP tasks
-- **Pydantic**: For data validation and settings management
-- **Docker**: Containerization platform
-
-## Financial Compliance Use Cases
-
-This demo showcases technologies that can be applied to financial compliance:
-
-1. **Voice Surveillance**: Transcribe and analyze voice communications for compliance monitoring
-2. **Multi-language Support**: Process communications in different languages
-3. **Speaker Identification**: Identify different speakers in recorded calls
-4. **Sentiment Analysis**: Detect emotional signals that might indicate risk or compliance issues
-
-### Sentiment Analysis for Financial Compliance
-
-1. **Detect Emotional Signals in Communications**:
-   - Identify frustration or anxiety in client communications that might indicate dissatisfaction
-   - Flag unusually positive or negative communications for review
-
-2. **Risk Assessment**:
-   - Track sentiment trends in communications from specific traders or clients
-   - Identify sudden shifts in sentiment that might correlate with market events
-
-3. **Compliance Monitoring**:
-   - Combine with keyword detection to prioritize review of negative communications containing specific terms
-   - Help identify potential insider trading or market manipulation by detecting emotional cues
-
-4. **Customer Service Improvement**:
-   - Analyze sentiment in customer support calls to identify areas for improvement
-   - Track sentiment over time to measure the effectiveness of service changes
+### Environment Variables
+- `LOW_MEMORY`: Set "true" to disable memory-intensive features
+- `HF_AUTH_TOKEN`: HuggingFace token for diarization

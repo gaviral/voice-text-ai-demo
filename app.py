@@ -3,6 +3,9 @@ import whisper
 import os
 from transformers import pipeline
 from pydantic import BaseModel
+from typing import List, Dict, Optional
+from sentence_transformers import SentenceTransformer, util
+import torch
 
 LOW_MEMORY = os.environ.get("LOW_MEMORY", "false").lower() == "true"
 HF_AUTH_TOKEN = os.environ.get("HF_AUTH_TOKEN", None)
@@ -28,9 +31,67 @@ translation_model = MarianMTModel.from_pretrained(model_name)
 # Initialize sentiment analysis pipeline
 sentiment_analyzer = pipeline("sentiment-analysis")
 
+# Initialize sentence transformer model for semantic similarity
+sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# Define compliance keywords with categories
+COMPLIANCE_KEYWORDS = {
+    "insider_trading": [
+        "insider information", 
+        "non-public information", 
+        "before announcement", 
+        "confidential data",
+        "trading window",
+        "blackout period"
+    ],
+    "market_manipulation": [
+        "pump and dump", 
+        "artificially inflate", 
+        "manipulate price", 
+        "spread rumors",
+        "false information"
+    ],
+    "confidentiality": [
+        "strictly confidential", 
+        "not for distribution", 
+        "internal only", 
+        "do not share",
+        "between us only"
+    ],
+    "suspicious_activity": [
+        "off the record", 
+        "don't tell anyone", 
+        "delete this message", 
+        "not through email",
+        "call me instead",
+        "avoid documentation"
+    ]
+}
+
+# Precompute embeddings for all keywords
+KEYWORD_EMBEDDINGS = {}
+for category, keywords in COMPLIANCE_KEYWORDS.items():
+    KEYWORD_EMBEDDINGS[category] = sentence_model.encode(keywords)
+
 # Define request models
 class TextRequest(BaseModel):
     text: str
+    
+class KeywordDetectionRequest(BaseModel):
+    text: str
+    threshold: Optional[float] = 0.75
+    max_results: Optional[int] = 5
+
+class KeywordMatch(BaseModel):
+    keyword: str
+    category: str
+    similarity_score: float
+    
+class KeywordDetectionResponse(BaseModel):
+    text: str
+    matches: List[KeywordMatch]
+    risk_level: str
+    explanation: str
 
 @app.get("/")
 def read_root():
@@ -113,4 +174,135 @@ async def transcribe_with_sentiment(file: UploadFile = File(...)):
         "sentiment": sentiment_result[0]["label"],
         "score": sentiment_result[0]["score"],
         "explanation": f"The transcript has been classified as {sentiment_result[0]['label']} with a confidence of {sentiment_result[0]['score']:.2f}"
+    }
+
+@app.post("/detect-compliance-keywords")
+async def detect_compliance_keywords(request: KeywordDetectionRequest):
+    """
+    Detect potentially problematic phrases in financial communications.
+    Uses semantic similarity to identify phrases similar to known compliance risk keywords.
+    """
+    # Encode the input text
+    text_embedding = sentence_model.encode(request.text)
+    
+    # Find matches across all categories
+    matches = []
+    
+    for category, keyword_embeddings in KEYWORD_EMBEDDINGS.items():
+        # Calculate cosine similarity between text and all keywords in this category
+        similarities = util.cos_sim(text_embedding, keyword_embeddings)[0]
+        
+        # Get the keywords for this category
+        keywords = COMPLIANCE_KEYWORDS[category]
+        
+        # Find matches above threshold
+        for i, similarity in enumerate(similarities):
+            if similarity >= request.threshold:
+                matches.append(KeywordMatch(
+                    keyword=keywords[i],
+                    category=category,
+                    similarity_score=float(similarity)
+                ))
+    
+    # Sort matches by similarity score (highest first)
+    matches.sort(key=lambda x: x.similarity_score, reverse=True)
+    
+    # Limit to max_results
+    matches = matches[:request.max_results]
+    
+    # Determine risk level based on number and strength of matches
+    risk_level = "LOW"
+    if matches:
+        avg_score = sum(match.similarity_score for match in matches) / len(matches)
+        if len(matches) >= 3 or avg_score > 0.9:
+            risk_level = "HIGH"
+        elif len(matches) >= 1 or avg_score > 0.8:
+            risk_level = "MEDIUM"
+    
+    # Create explanation
+    if not matches:
+        explanation = "No compliance risk keywords detected in the text."
+    else:
+        categories = set(match.category for match in matches)
+        explanation = f"Detected {len(matches)} potential compliance issues in categories: {', '.join(categories)}."
+        if risk_level == "HIGH":
+            explanation += " This communication requires immediate review."
+        elif risk_level == "MEDIUM":
+            explanation += " This communication should be reviewed."
+    
+    return KeywordDetectionResponse(
+        text=request.text,
+        matches=matches,
+        risk_level=risk_level,
+        explanation=explanation
+    )
+
+@app.post("/transcribe-with-compliance-check")
+async def transcribe_with_compliance_check(file: UploadFile = File(...), threshold: float = 0.75, max_results: int = 5):
+    """
+    Transcribe audio and check for compliance keywords in one step.
+    """
+    temp_filename = "temp_audio_file"
+    with open(temp_filename, "wb") as f:
+        f.write(await file.read())
+
+    result = whisper_model.transcribe(temp_filename, fp16=False)
+    transcript = result["text"]
+    os.remove(temp_filename)
+    
+    # Check for compliance keywords
+    text_embedding = sentence_model.encode(transcript)
+    
+    # Find matches across all categories
+    matches = []
+    
+    for category, keyword_embeddings in KEYWORD_EMBEDDINGS.items():
+        # Calculate cosine similarity between text and all keywords in this category
+        similarities = util.cos_sim(text_embedding, keyword_embeddings)[0]
+        
+        # Get the keywords for this category
+        keywords = COMPLIANCE_KEYWORDS[category]
+        
+        # Find matches above threshold
+        for i, similarity in enumerate(similarities):
+            if similarity >= threshold:
+                matches.append({
+                    "keyword": keywords[i],
+                    "category": category,
+                    "similarity_score": float(similarity)
+                })
+    
+    # Sort matches by similarity score (highest first)
+    matches.sort(key=lambda x: x["similarity_score"], reverse=True)
+    
+    # Limit to max_results
+    matches = matches[:max_results]
+    
+    # Determine risk level based on number and strength of matches
+    risk_level = "LOW"
+    if matches:
+        avg_score = sum(match["similarity_score"] for match in matches) / len(matches)
+        if len(matches) >= 3 or avg_score > 0.9:
+            risk_level = "HIGH"
+        elif len(matches) >= 1 or avg_score > 0.8:
+            risk_level = "MEDIUM"
+    
+    # Create explanation
+    if not matches:
+        explanation = "No compliance risk keywords detected in the transcript."
+    else:
+        categories = set(match["category"] for match in matches)
+        explanation = f"Detected {len(matches)} potential compliance issues in categories: {', '.join(categories)}."
+        if risk_level == "HIGH":
+            explanation += " This communication requires immediate review."
+        elif risk_level == "MEDIUM":
+            explanation += " This communication should be reviewed."
+    
+    return {
+        "transcript": transcript,
+        "compliance_check": {
+            "matches": matches,
+            "risk_level": risk_level,
+            "explanation": explanation
+        }
     }
