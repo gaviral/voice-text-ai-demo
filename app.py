@@ -1,12 +1,29 @@
 from fastapi import FastAPI, File, UploadFile
 import whisper
 import os
-from pyannote.audio import Pipeline
+
+print(os.environ.get("LOW_MEMORY", "false").lower())
+print(os.environ.get("HF_AUTH_TOKEN", None))
+
+# Optional: import Pipeline only if we decide to do diarization
+LOW_MEMORY = os.environ.get("LOW_MEMORY", "false").lower() == "true"
+HF_AUTH_TOKEN = os.environ.get("HF_AUTH_TOKEN", None)
+
 
 app = FastAPI()
 
+# Load Whisper
 whisper_model = whisper.load_model("tiny")
-diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization")
+
+# If memory isn't restricted, and we have a token, load diarization
+if not LOW_MEMORY and HF_AUTH_TOKEN:
+    from pyannote.audio import Pipeline
+    diarization_pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization",
+        use_auth_token=HF_AUTH_TOKEN
+    )
+else:
+    diarization_pipeline = None
 
 @app.get("/")
 def read_root():
@@ -24,6 +41,9 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
 @app.post("/diarize")
 async def diarize_audio(file: UploadFile = File(...)):
+    if diarization_pipeline is None:
+        return {"error": "Diarization disabled or missing HF_AUTH_TOKEN."}
+
     temp_filename = "temp_audio_file"
     with open(temp_filename, "wb") as f:
         f.write(await file.read())
