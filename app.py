@@ -79,7 +79,7 @@ class TextRequest(BaseModel):
     
 class KeywordDetectionRequest(BaseModel):
     text: str
-    threshold: Optional[float] = 0.75
+    threshold: Optional[float] = 0.5
     max_results: Optional[int] = 5
 
 class KeywordMatch(BaseModel):
@@ -238,7 +238,7 @@ async def detect_compliance_keywords(request: KeywordDetectionRequest):
     )
 
 @app.post("/transcribe-with-compliance-check")
-async def transcribe_with_compliance_check(file: UploadFile = File(...), threshold: float = 0.75, max_results: int = 5):
+async def transcribe_with_compliance_check(file: UploadFile = File(...), threshold: float = 0.5, max_results: int = 5):
     """
     Transcribe audio and check for compliance keywords in one step.
     """
